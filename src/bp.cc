@@ -1,6 +1,3 @@
-//#include "ClassFormatDataSet.h"
-//#include "OneHotClassFormat.h"
-
 /* The measurer */
 #include "ClassMeasurer.h"
 #include "MSEMeasurer.h"
@@ -50,7 +47,6 @@ using namespace Torch;
 /* Prototype */
 ConnectedMachine createMachine(Allocator *allocator, int n_inputs, int n_hu, int n_outputs); 
 StochasticGradient createTrainer(Allocator *allocator, ConnectedMachine *mlp, int n_outputs, LearningOpt *opt=NULL); 
-
 void Training(Allocator *allocator, char *file, char *model_file, int n_inputs, int n_hu, int m_outputs, LearningOpt *opt,CmdLine *cmd);
 void Validation(Allocator *allocator, char *valid_file, DiskXFile *model, int n_inputs, int n_hu, int n_targets, CmdLine *cmd);
 
@@ -106,6 +102,7 @@ int main(int argc, char **argv)
 	DiskXFile *model = NULL;
 
 
+	//=================== Select the mode ==========================
 	switch(mode) {
 		case TRAIN:
 			Training(allocator,file,model_file,n_inputs,n_hu,n_targets,&learn_opt,&cmd);
@@ -164,9 +161,11 @@ void Training(Allocator *allocator, char *file, char *model_file, int n_inputs, 
 	measurers.addNode(mse_meas);
 
 
-//=================== Let's go... ===============================
+	//================= Train the MLP and find the weight ====================
     	trainer.train(data, &measurers);
-      
+
+	
+      	//================ Save all the data in the model =====================
 	DiskXFile model_(model_file, "w");
 	cmd->saveXFile(&model_);
 	mv_norm->saveXFile(&model_);
