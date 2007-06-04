@@ -49,12 +49,10 @@ using namespace Torch;
 
 /* Prototype */
 ConnectedMachine createMachine(Allocator *allocator, int n_inputs, int n_hu, int n_outputs); 
-StochasticGradient createTrainer(Allocator *allocator, ConnectedMachine *mlp, LearningOpt *opt, int n_outputs);
-
+StochasticGradient createTrainer(Allocator *allocator, ConnectedMachine *mlp, int n_outputs, LearningOpt *opt=NULL); 
 
 void Training(Allocator *allocator, char *file, char *model_file, int n_inputs, int n_hu, int m_outputs, LearningOpt *opt,CmdLine *cmd);
-void Validation(Allocator *allocator, char *valid_file, DiskXFile *model, CmdLine *cmd); 
-
+void Validation(Allocator *allocator, char *valid_file, DiskXFile *model, int n_inputs, int n_hu, int n_targets, CmdLine *cmd);
 
 int main(int argc, char **argv)
 {
@@ -114,7 +112,8 @@ int main(int argc, char **argv)
 			break;
 		case VALID:
 			model = new(allocator) DiskXFile(model_file, "r");
-			Validation(allocator,file,model,&cmd);
+			cmd.loadXFile(model);
+			Validation(allocator,file,model,n_inputs,n_hu,n_targets,&cmd);
 			break;
 		case TEST:
 			model = new(allocator) DiskXFile(model_file, "r");
@@ -143,7 +142,7 @@ void Training(Allocator *allocator, char *file, char *model_file, int n_inputs, 
 	ConnectedMachine mlp = createMachine(allocator, n_inputs,n_hu,n_outputs);
 
 	//Create Trainer
-	StochasticGradient trainer = createTrainer(allocator, &mlp, learn_opt, n_outputs);
+	StochasticGradient trainer = createTrainer(allocator, &mlp, n_outputs, learn_opt);
 
 
 	//=================== DataSets  ===================
@@ -175,39 +174,32 @@ void Training(Allocator *allocator, char *file, char *model_file, int n_inputs, 
 }
 
 
-void Validation(Allocator *allocator, char *valid_file, DiskXFile *model, CmdLine *cmd) {
-
-	int n_inputs;
-	int n_hu;
-	int n_targets;
-
-	printf("Load model...\n");
-	//=================== Model built  ===================
-	//Load the model from validation set to obtain old normalization
-	MeanVarNorm *mv_norm = NULL;
-
-	cmd->loadXFile(model);
-	mv_norm->loadXFile(model);
+void Validation(Allocator *allocator, char *valid_file, DiskXFile *model, int n_inputs, int n_hu, int n_targets, CmdLine *cmd) {
 
 
-	printf("Starting Validation\n");
-	//=================== The Machine and its trainer  ===================	
-	//Create Machine
-	ConnectedMachine mlp;
-  	mlp.build();
- 	mlp.setPartialBackprop();
-	mlp.loadXFile(model);
-
-	//Create Trainer To be clear
-	//StochasticGradient trainer = createTrainer(allocator, &mlp);
-
-
-	printf("Load data...\n");
 	//=================== Validation DataSets  ===================	
-	DataSet *valid_data = new(allocator) MatDataSet(valid_file, n_inputs, n_targets, false, -1, true);
+	printf("Load data...\n");
+	printf("%s, %d, %d, %d",valid_file,n_inputs,n_hu,n_targets);
+	DataSet *valid_data = new(allocator) MatDataSet(valid_file, n_inputs, n_targets);
+
+
+	//=================== Normalize Data  ===================
+	printf("Normalize data ...\n");
+	MeanVarNorm *mv_norm = NULL;
+	mv_norm = new(allocator) MeanVarNorm(valid_data);
+	mv_norm->loadXFile(model); //Loading value from model to know how we normalize last time
         valid_data->preProcess(mv_norm);
 
+	//=================== The Machine and its trainer  ===================	
+	printf("Building Machine...\n");
+	//Create Machine structure
+	ConnectedMachine mlp = createMachine(allocator,n_inputs,n_hu,n_targets);
+	mlp.loadXFile(model); //Loading MLP weight structure
+	//Create trainer structure
+	StochasticGradient trainer = createTrainer(allocator, &mlp, n_targets);
+
 	//=================== Mesurer  ===================
+	printf("Building Measurer...\n");
 	// The list of measurers
 	MeasurerList measurers;
 
@@ -215,16 +207,15 @@ void Validation(Allocator *allocator, char *valid_file, DiskXFile *model, CmdLin
 	MSEMeasurer *valid_mse_meas = new(allocator) MSEMeasurer(mlp.outputs, valid_data, cmd->getXFile("the_valid_mse_err"));
         measurers.addNode(valid_mse_meas);
 
-	printf("let's go...\n");
-	//=================== Let's go... ===============================
-//	trainer.test(&measurers);
+	//=================== Test on Validation ===============================
+	printf("Test on validation\n");
+	trainer.test(&measurers);
 }
 
 	
 
 //=================== Create the MLP... =========================
 ConnectedMachine createMachine(Allocator *allocator, int n_inputs, int n_hu, int n_outputs) {
-
 	ConnectedMachine mlp;
 	if(n_hu > 0)  {
 	
@@ -252,7 +243,9 @@ ConnectedMachine createMachine(Allocator *allocator, int n_inputs, int n_hu, int
 
 
 //=================== The Trainer ===============================
-StochasticGradient createTrainer(Allocator *allocator, ConnectedMachine *mlp, LearningOpt *opt, int n_outputs) {
+StochasticGradient createTrainer(Allocator *allocator, ConnectedMachine *mlp, int n_outputs, LearningOpt *opt) {
+
+	printf("Trainer creation...\n");
 
 	// The criterion for the StochasticGradient (MSE criterion)
 	Criterion *criterion = NULL;
@@ -261,11 +254,12 @@ StochasticGradient createTrainer(Allocator *allocator, ConnectedMachine *mlp, Le
 	// The Gradient Machine Trainer
 	StochasticGradient trainer(mlp, criterion);
 
-	trainer.setIOption("max iter",opt->max_iter);
-	trainer.setROption("end accuracy", opt->accuracy);
-	trainer.setROption("learning rate", opt->learning_rate);
-	trainer.setROption("learning rate decay", opt->decay);
-
+	if(opt!=NULL) {
+		trainer.setIOption("max iter",opt->max_iter);
+		trainer.setROption("end accuracy", opt->accuracy);
+		trainer.setROption("learning rate", opt->learning_rate);
+		trainer.setROption("learning rate decay", opt->decay);
+	}
 	return trainer;
 }
 
