@@ -2,13 +2,14 @@
 #include <fstream>
 #include <string>
 #include <vector>
-
+#include <algorithm>
 
 #define NOF_PATTERNS 2310
 #define NOF_DIMS 19
 #define NOF_CLASSES 7
-#define RATIO_TRAIN 0.2
+#define RATIO_TRAIN 0.02
 #define RATIO_VALID 0.4
+#define ID_VS_OTHERS 0
 
 using namespace std;
 class Pattern {
@@ -34,7 +35,15 @@ public:
 		if(name.compare("WINDOW") == 0) id=5;
 		if(name.compare("PATH") == 0) id=6;
 		if(name.compare("GRASS") == 0) id=7;
-		if(id != 0) code.replace((id-1)*2,1,"1");
+		// Chaque classe a son output 
+		if(ID_VS_OTHERS == 0) {
+			if(id != 0) code.replace((id-1)*2,1,"1");
+		}
+		//Il y a une classe qui est contre les autres
+		else {
+			if(id == ID_VS_OTHERS) code = "1";
+			else code = "0";
+		}
 	}
 
 	void setValues(string str) {
@@ -64,13 +73,25 @@ struct SortByCode
 
 };
 
+class iotaGen 
+{
+public:
+  iotaGen (int start = 0) : current(start) { }
+  int operator() () { return current++; }
+private:
+  int current;
+};
 
-
+// do it again, with explicit random number generator
+struct RandomInteger {
+      int operator() (int m) { return rand() % m; }
+} randomize;
 
 /* Prototype */
 void load_file(string fileName, vector<Pattern> &p);
 void createDB(vector<Pattern> &p);
 void countNbP4Classes(vector <Pattern> &p, int *nb_inclass); 
+vector<int> randperm(int start,int end);
 
 int main() {
 
@@ -133,7 +154,7 @@ void createDB(vector<Pattern> &p) {
 	//Count how many pattern we have for each classes
 	int count[] = {0,0,0,0,0,0,0}; 
 	countNbP4Classes(p,count);
-	for(int i(0); i<7; i++) cout << count[i] << " ";
+	for(int i(0); i<NOF_CLASSES; i++) cout << count[i] << " ";
 	cout << endl;
 	
 	//Create the 3 output files
@@ -147,21 +168,33 @@ void createDB(vector<Pattern> &p) {
 	int nb_test(count[0]-nb_train-nb_valid);
 	cout << nb_train<<" "<< nb_valid <<" "<< nb_test << endl;
 
+	int nof_outputs;
+	if(ID_VS_OTHERS==0) nof_outputs = NOF_CLASSES;
+	else nof_outputs = 1;
+
 	//Fill first row in each datafiles
-	fo_train << nb_train*NOF_CLASSES << " " << NOF_DIMS+NOF_CLASSES << endl;
-	fo_valid << nb_valid*NOF_CLASSES << " " << NOF_DIMS+NOF_CLASSES << endl;
-	fo_test  << nb_test*NOF_CLASSES  << " " << NOF_DIMS+NOF_CLASSES << endl;
+	fo_train << nb_train*NOF_CLASSES << " " << NOF_DIMS+nof_outputs << endl;
+	fo_valid << nb_valid*NOF_CLASSES << " " << NOF_DIMS+nof_outputs << endl;
+	fo_test  << nb_test*NOF_CLASSES  << " " << NOF_DIMS+nof_outputs << endl;
 	
 
-	int j;
-	for(int i(0); i< p.size(); i++) {
-		j=i%count[0];
-		//cout << j << endl;
-		if(j<nb_train) fo_train << p[i] << endl; 
-		else if(j< nb_train+nb_valid) fo_valid << p[i] << endl;
-		else fo_test << p[i] << endl;
+
+	//for(int i(0); i<10; i++) cout << train_randind[i] << endl;
+//	cout << train_randind.size()<<" "<<valid_randind.size()<<" "<<test_randind.size()<<endl;
+
+	//Initialize random seed 
+	srand ( time(NULL) );
+	for(int c(0); c<NOF_CLASSES; c++) {
+		vector<int> randind = randperm(0,count[c]);
+		for(int i(0); i<5; i++) cout << randind[i] << " ";
+		cout << endl;	
+		for(int i(0); i< count[c]; i++) {
+			if(i<nb_train) fo_train << p[randind[i]+ c*count[c]] << endl; 
+			else if(i< nb_train+nb_valid) fo_valid << p[randind[i]+ c*count[c]] << endl;
+			else fo_test << p[randind[i]+ c*count[c]] << endl;
+		}	
 	}
-	
+		
 	fo_train.close();	
 	fo_valid.close();	
 	fo_test.close();	
@@ -173,3 +206,16 @@ void countNbP4Classes(vector<Pattern> &p, int *nb_inclass) {
 		nb_inclass[p[i].id-1]++;
 	}
 }
+
+
+vector<int> randperm(int start,int end)
+{
+  // first make the vector containing 1 2 3 ... 10
+  std::vector<int> numbers(end-start);
+  std::generate(numbers.begin(), numbers.end(), iotaGen(start));
+
+  // then randomly shuffle the elements
+  std::random_shuffle(numbers.begin(), numbers.end(),randomize);
+
+	return numbers;
+ }
