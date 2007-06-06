@@ -10,6 +10,7 @@
 #include "ConnectedMachine.h"
 #include "Linear.h"
 #include "Tanh.h"
+#include "Sigmoid.h"
 #include "LogSoftMax.h"
 
 /* Management of files */
@@ -24,21 +25,19 @@ enum MlpMode{
 	TEST
 }; 
 
-class LearningOpt{
-
-public:
+struct MlpParam{
+	int n_inputs;
+	int n_outputs;
+	int n_hu;
 	int max_iter; 
 	real accuracy;
 	real decay;
 	real learning_rate; 
 	real weight_decay;
+	char *file;
 	char *valid_file;
 	char *suffix;
-
-	LearningOpt() : 
-		max_iter(500), accuracy(0.00001),decay(0),learning_rate(0.01),weight_decay(0),valid_file(NULL),suffix("")
-	{}
-
+	char *model_file;
 };
 
 
@@ -46,26 +45,17 @@ using namespace Torch;
 
 
 /* Prototype */
-ConnectedMachine * createMachine(Allocator *allocator, int n_inputs, int n_hu, int n_outputs); 
-StochasticGradient *createTrainer(Allocator *allocator, ConnectedMachine *mlp, LearningOpt *opt=NULL); 
-void Training(Allocator *allocator, char *file, char *model_file, int n_inputs, int n_hu, int m_outputs, LearningOpt *opt,CmdLine *cmd);
-void Testing(Allocator *allocator, char *valid_file, DiskXFile *model, int n_inputs, int n_hu, int n_targets, CmdLine *cmd);
+ConnectedMachine * createMachine(Allocator *allocator, MlpParam *param); 
+StochasticGradient *createTrainer(Allocator *allocator, ConnectedMachine *mlp, MlpParam *opt=NULL); 
+void Training(Allocator *allocator, MlpParam *param,CmdLine *cmd);
+void Testing(Allocator *allocator, MlpParam *param, CmdLine *cmd);
 
 int main(int argc, char **argv)
 {
-	char *file;
-
-	int n_inputs;
-	int n_targets;
-	int n_hu;
-
-	char *model_file;
 
 	Allocator *allocator = new Allocator;
 	DiskXFile::setLittleEndianMode();
-
-	LearningOpt learn_opt;
-
+	MlpParam param;
 
 
 	//=================== The command-line ==========================
@@ -79,42 +69,38 @@ int main(int argc, char **argv)
 	// Train mode
 	cmd.addMasterSwitch("--train");
 	cmd.addText("\nArguments:");
-	cmd.addSCmdArg("file", &file, "the train file");
-	cmd.addICmdArg("n_inputs", &n_inputs, "input dimension of the data", true);
-	cmd.addICmdArg("n_targets", &n_targets, "output dim. (regression) or # of classes (classification)", true);
+	cmd.addSCmdArg("file", &(param.file), "the train file");
+	cmd.addICmdArg("n_inputs", &(param.n_inputs), "input dimension of the data", true);
+	cmd.addICmdArg("n_targets", &(param.n_outputs), "output dim. (regression) or # of classes (classification)", true);
 
 	cmd.addText("\nLearning Options:");
-	cmd.addICmdOption("-nhu", &n_hu, 15, "number of hidden units", true);
-	cmd.addICmdOption("-iter", &(learn_opt.max_iter), 25, "max number of iterations");
-	cmd.addRCmdOption("-lr", &(learn_opt.learning_rate), 0.01, "learning rate");
-	cmd.addRCmdOption("-e", &(learn_opt.accuracy), 0.00001, "end accuracy");
-	cmd.addRCmdOption("-lrd", &(learn_opt.decay), 0, "learning rate decay");
-	cmd.addRCmdOption("-wd", &(learn_opt.weight_decay), 0, "weight decay", true);
+	cmd.addICmdOption("-nhu", &(param.n_hu), 15, "number of hidden units", true);
+	cmd.addICmdOption("-iter", &(param.max_iter), 25, "max number of iterations");
+	cmd.addRCmdOption("-lr", &(param.learning_rate), 0.01, "learning rate");
+	cmd.addRCmdOption("-e", &(param.accuracy), 0.00001, "end accuracy");
+	cmd.addRCmdOption("-lrd", &(param.decay), 0, "learning rate decay");
+	cmd.addRCmdOption("-wd", &(param.weight_decay), 0, "weight decay", true);
 
 	cmd.addText("\nMisc Options:");
-	cmd.addSCmdOption("-valid", &(learn_opt.valid_file),"NULL","the valid file");
-	cmd.addSCmdOption("-model", &model_file,"bp_model.dat","the model file");
-	cmd.addSCmdOption("-suffix", &(learn_opt.suffix),"","Use a suffix for MSE (train/valid) error");
+	cmd.addSCmdOption("-valid", &(param.valid_file),"NULL","the valid file");
+	cmd.addSCmdOption("-save", &(param.model_file),"bp_model.dat","the model file");
+	cmd.addSCmdOption("-suffix", &(param.suffix),"","Use a suffix for MSE (train/valid) error");
 
 	cmd.addMasterSwitch("--test");
-	cmd.addSCmdArg("model", &model_file, "the model file");
-	cmd.addSCmdArg("file", &file, "the train file");
+	cmd.addSCmdArg("model", &(param.model_file), "the model file");
+	cmd.addSCmdArg("file", &(param.file), "the train file");
 
 
 	// Read the command line
 	MlpMode mode = (MlpMode)cmd.read(argc, argv);
-	DiskXFile *model = NULL;
-
 
 	//=================== Select the mode ==========================
 	switch(mode) {
 		case TRAIN:
-			Training(allocator,file,model_file,n_inputs,n_hu,n_targets,&learn_opt,&cmd);
+			Training(allocator,&param,&cmd);
 			break;
 		case TEST:
-			model = new(allocator) DiskXFile(model_file, "r");
-			cmd.loadXFile(model);
-			Testing(allocator,file,model,n_inputs,n_hu,n_targets,&cmd);
+			Testing(allocator,&param,&cmd);
 			break;
 		case ALL:
 			printf("Not Implemented\n");
@@ -127,23 +113,23 @@ int main(int argc, char **argv)
 
 
 
-void Training(Allocator *allocator, char *file, char *model_file, int n_inputs, int n_hu, int n_outputs, LearningOpt *learn_opt,CmdLine *cmd) {
+void Training(Allocator *allocator, MlpParam *param, CmdLine *cmd) {
 
 	//================== Check if we need to validate the data ===================
 	bool validation(false);
-	if(strcmp(learn_opt->valid_file,"NULL") != 0) validation=true;
+	if(strcmp(param->valid_file,"NULL") != 0) validation=true;
 	
 	printf("Start Training ... \n");
 	//=================== The Machine and its trainer  ===================	
 	//Create Machine
-	ConnectedMachine *mlp = createMachine(allocator, n_inputs,n_hu,n_outputs);
+	ConnectedMachine *mlp = createMachine(allocator,param);
 	//Create Trainer
-	StochasticGradient *trainer = createTrainer(allocator, mlp, learn_opt);
+	StochasticGradient *trainer = createTrainer(allocator, mlp, param);
 
 
 	//=================== DataSets  ===================
 	//Create a data set
-	DataSet *data = new(allocator) MatDataSet(file, n_inputs, n_outputs);
+	DataSet *data = new(allocator) MatDataSet(param->file, param->n_inputs, param->n_outputs);
 	//Computes means and standard deviation
 	MeanVarNorm *mv_norm = new(allocator) MeanVarNorm(data);
 	//Normalizes the data set
@@ -155,7 +141,7 @@ void Training(Allocator *allocator, char *file, char *model_file, int n_inputs, 
 
 	// The mean square error file on disk
 	char mse_train_fname[256] = "MSE_train";
-	strcat(mse_train_fname,learn_opt->suffix);
+	strcat(mse_train_fname,param->suffix);
 	DiskXFile *mse_train_file = new(allocator) DiskXFile(mse_train_fname, "w");
 	MSEMeasurer *mse_meas = new(allocator) MSEMeasurer(mlp->outputs, data, mse_train_file);
 	measurers.addNode(mse_meas);
@@ -164,8 +150,8 @@ void Training(Allocator *allocator, char *file, char *model_file, int n_inputs, 
 	if(validation) {
 		printf("Load Validation data...\n");
 		char mse_valid_fname[256] = "MSE_valid";
-		strcat(mse_valid_fname,learn_opt->suffix);
-		DataSet *vdata =  new(allocator) MatDataSet(learn_opt->valid_file, n_inputs, n_outputs);
+		strcat(mse_valid_fname,param->suffix);
+		DataSet *vdata =  new(allocator) MatDataSet(param->valid_file, param->n_inputs, param->n_outputs);
 		vdata->preProcess(mv_norm);
 		DiskXFile *mse_valid_file = new(allocator) DiskXFile(mse_valid_fname, "w");
 		MSEMeasurer *mse_valid_meas = new(allocator) MSEMeasurer(mlp->outputs, vdata, mse_valid_file);
@@ -178,20 +164,23 @@ void Training(Allocator *allocator, char *file, char *model_file, int n_inputs, 
 
 	
       	//================ Save all the data in the model =====================
-	DiskXFile model_(model_file, "w");
+	DiskXFile model_(param->model_file, "w");
 	cmd->saveXFile(&model_);
 	mv_norm->saveXFile(&model_);
 	mlp->saveXFile(&model_);
 }
 
+void Testing(Allocator *allocator, MlpParam *param, CmdLine *cmd) {
 
-void Testing(Allocator *allocator, char *file, DiskXFile *model, int n_inputs, int n_hu, int n_targets, CmdLine *cmd) {
+	//=================== Load Model =====================
+	DiskXFile *model = new(allocator) DiskXFile(param->model_file, "r");
+	cmd->loadXFile(model);
 
 
 	//=================== Validation DataSets  ===================	
 	printf("Load data...\n");
-	printf("%s, %d, %d, %d",file,n_inputs,n_hu,n_targets);
-	DataSet *data = new(allocator) MatDataSet(file, n_inputs, n_targets);
+	printf("%s, %d, %d, %d\n",param->file,param->n_inputs,param->n_hu,param->n_outputs);
+	DataSet *data = new(allocator) MatDataSet(param->file, param->n_inputs, param->n_outputs);
 
 	//=================== Normalize Data  ===================
 	printf("Normalize data ...\n");
@@ -203,7 +192,7 @@ void Testing(Allocator *allocator, char *file, DiskXFile *model, int n_inputs, i
 	//=================== The Machine and its trainer  ===================	
 	printf("Building Machine...\n");
 	//Create Machine structure
-	ConnectedMachine *mlp = createMachine(allocator,n_inputs,n_hu,n_targets);
+	ConnectedMachine *mlp = createMachine(allocator,param);
 	mlp->loadXFile(model); //Loading MLP weight structure
 	//Create trainer structure
 	StochasticGradient *trainer = createTrainer(allocator, mlp);
@@ -221,27 +210,30 @@ void Testing(Allocator *allocator, char *file, DiskXFile *model, int n_inputs, i
 	printf("Test our built model\n");
 	trainer->test(&measurers);
 }
-
 	
 
 //=================== Create the MLP... =========================
-ConnectedMachine *createMachine(Allocator *allocator, int n_inputs, int n_hu, int n_outputs) {
+ConnectedMachine *createMachine(Allocator *allocator, MlpParam *param) {
 	ConnectedMachine *mlp = new(allocator) ConnectedMachine();
-	if(n_hu > 0)  {
+	if(param->n_hu > 0)  {
 	
 		//Set the first layer (input -> hidden units)
-		Linear *c1 = new(allocator) Linear(n_inputs, n_hu);
-		//  c1->setROption("weight decay", weight_decay);
+		Linear *c1 = new(allocator) Linear( param->n_inputs, param->n_hu);
+		c1->setROption("weight decay", param->weight_decay);
 		mlp->addFCL(c1);    
 		
 		//Set the second layer (threshold in hidden units)
-		Tanh *c2 = new(allocator) Tanh(n_hu);
+		Tanh *c2 = new(allocator) Tanh(param->n_hu);
 		mlp->addFCL(c2);
 
-		//Set the last layer (Output value)
-		Linear *c3 = new(allocator) Linear(n_hu, n_outputs);
-		// c3->setROption("weight decay", weight_decay);
+		//Set the third layer (Output value)
+		Linear *c3 = new(allocator) Linear(param->n_hu, param->n_outputs);
+		c3->setROption("weight decay", param->weight_decay);
 		mlp->addFCL(c3);
+	  
+		//Put the last value to binary
+		Sigmoid *c4 = new(allocator) Sigmoid(param->n_outputs);
+      		mlp->addFCL(c4);
 		}
 
 	// Initialize the MLP
@@ -253,7 +245,7 @@ ConnectedMachine *createMachine(Allocator *allocator, int n_inputs, int n_hu, in
 
 
 //=================== The Trainer ===============================
-StochasticGradient *createTrainer(Allocator *allocator, ConnectedMachine *mlp, LearningOpt *opt) {
+StochasticGradient *createTrainer(Allocator *allocator, ConnectedMachine *mlp, MlpParam *param) {
 
 	printf("Trainer creation...\n");
 
@@ -264,11 +256,11 @@ StochasticGradient *createTrainer(Allocator *allocator, ConnectedMachine *mlp, L
 	// The Gradient Machine Trainer
 	StochasticGradient *trainer = new(allocator) StochasticGradient(mlp, criterion);
 
-	if(opt!=NULL) {
-		trainer->setIOption("max iter",opt->max_iter);
-		trainer->setROption("end accuracy", opt->accuracy);
-		trainer->setROption("learning rate", opt->learning_rate);
-		trainer->setROption("learning rate decay", opt->decay);
+	if(param !=NULL) {
+		trainer->setIOption("max iter",param->max_iter);
+		trainer->setROption("end accuracy", param->accuracy);
+		trainer->setROption("learning rate", param->learning_rate);
+		trainer->setROption("learning rate decay", param->decay);
 	}
 	return trainer;
 }
