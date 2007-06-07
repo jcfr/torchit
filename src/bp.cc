@@ -31,8 +31,7 @@ struct MlpParam{
 	int n_hu;
 	int max_iter; 
 	real accuracy;
-	real decay;
-	real learning_rate; 
+	real learning_rate;
 	real weight_decay;
 	char *file;
 	char *valid_file;
@@ -77,8 +76,7 @@ int main(int argc, char **argv)
 	cmd.addICmdOption("-nhu", &(param.n_hu), 15, "number of hidden units", true);
 	cmd.addICmdOption("-iter", &(param.max_iter), 25, "max number of iterations");
 	cmd.addRCmdOption("-lr", &(param.learning_rate), 0.01, "learning rate");
-	cmd.addRCmdOption("-e", &(param.accuracy), 0.00001, "end accuracy");
-	cmd.addRCmdOption("-lrd", &(param.decay), 0, "learning rate decay");
+	cmd.addRCmdOption("-e", &(param.accuracy), 0.0000005, "end accuracy");
 	cmd.addRCmdOption("-wd", &(param.weight_decay), 0, "weight decay", true);
 
 	cmd.addText("\nMisc Options:");
@@ -260,7 +258,6 @@ StochasticGradient *createTrainer(Allocator *allocator, ConnectedMachine *mlp, M
 		trainer->setIOption("max iter",param->max_iter);
 		trainer->setROption("end accuracy", param->accuracy);
 		trainer->setROption("learning rate", param->learning_rate);
-		trainer->setROption("learning rate decay", param->decay);
 	}
 	return trainer;
 }
