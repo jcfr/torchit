@@ -8,7 +8,7 @@
 #define NOF_PATTERNS 2310
 #define NOF_DIMS 19
 #define NOF_CLASSES 7
-#define RATIO_TRAIN 0.2
+#define RATIO_TRAIN 0.02
 #define RATIO_VALID 0.6
 #define ID_VS_OTHERS 0
 

@@ -2,15 +2,15 @@ close all;
 clear all;
 
 %% Default files (should not be change)
-torchit='/home/neub/epfl/PCML/torchit/trunk/';	
+torchit='/home/rat/Master2/PCML/Torch3/torchit/torchit/';	
 exec=[torchit,'src/Linux_opt_float/bp --train '];
 args=[' -valid ',torchit,'data/valid ', torchit,'data/training 19 7'];
 
 %% Options that we want to tune
-learn_rate=0.01;
+learn_rate=0.0001;
 w_decay=0;
 nhu_vec=[5,10,15,25,50,100];
-n_train=462;
+n_train=42;
 n_valid=1379;
 
 %% Set the directory
