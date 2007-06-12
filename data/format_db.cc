@@ -121,7 +121,7 @@ void load_file(string fileName, vector<Pattern> &p) {
 	ifstream file;
 	file.open(fileName.c_str(), ios::in);
 	if(file.fail()) {
-		cerr << "Cannot read : " << fileName << ". (baklalala)" << endl;
+		cerr << "Cannot read : " << fileName << "." << endl;
 		cerr << "Exiting now." << endl;
 		file.close();
 		exit(1);
