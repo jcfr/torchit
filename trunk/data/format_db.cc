@@ -121,7 +121,7 @@ void load_file(string fileName, vector<Pattern> &p) {
 	ifstream file;
 	file.open(fileName.c_str(), ios::in);
 	if(file.fail()) {
-		cerr << "Cannot read : " << fileName << "." << endl;
+		cerr << "Cannot read : " << fileName << ". (baklalala)" << endl;
 		cerr << "Exiting now." << endl;
 		file.close();
 		exit(1);
@@ -167,7 +167,7 @@ void createDB(vector<Pattern> &p) {
 	int nb_train((int)(RATIO_TRAIN*(double)count[0]));
 	int nb_valid((int)(RATIO_VALID*(double)count[0]));		
 	int nb_test(count[0]-nb_train-nb_valid);
-	cout << "Samples : ";
+	cout << "Samples: ";
        	cout << "train="<<NOF_CLASSES*nb_train<<", ";
 	cout << "valid="<<NOF_CLASSES*nb_valid<<", ";
 	cout << "test="<<NOF_CLASSES*nb_test << endl;
