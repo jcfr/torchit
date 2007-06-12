@@ -3,6 +3,7 @@
 #include <string>
 #include <vector>
 #include <algorithm>
+#include <time.h>
 
 #define NOF_PATTERNS 2310
 #define NOF_DIMS 19
