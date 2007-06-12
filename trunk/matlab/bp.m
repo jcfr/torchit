@@ -10,10 +10,12 @@ args=[' -valid ',torchit,'data/valid ', torchit,'data/training 19 7'];
 learn_rate=0.01;
 w_decay=0;
 nhu_vec=[5,10,15,25,50,100];
+n_train=462;
+n_valid=1379;
 
 %% Set the directory
 old_dir=pwd;
-dir=['simu_nhu_lr',num2str(learn_rate),'_wd',num2str(w_decay)]; 
+dir=['simu_t',num2str(n_train),'v',num2str(n_valid),'_nhu_lr',num2str(learn_rate),'_wd',num2str(w_decay)]; 
 system(['mkdir ',dir]);
 cd(dir);
 
@@ -41,7 +43,7 @@ for i=1:6
     figure(i);
     epoque=[1:length(MSE_train)];
     plot(epoque,MSE_train,'b',epoque,MSE_valid,'r'); 
-    legend('train','valid');
+    legend(['train (',num2str(n_train),' samples)'],['valid (',num2str(n_valid),' samples)']);
     xlabel('epoques');
     ylabel('Mean Square Error');
     title(['BackProp(\alpha)    \alpha=\{nhu = ',num2str(nhu),',lr = ',num2str(learn_rate),',wd = ',num2str(w_decay),'\}']);
