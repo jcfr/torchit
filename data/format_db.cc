@@ -8,8 +8,8 @@
 #define NOF_PATTERNS 2310
 #define NOF_DIMS 19
 #define NOF_CLASSES 7
-#define RATIO_TRAIN 0.02
-#define RATIO_VALID 0.4
+#define RATIO_TRAIN 0.2
+#define RATIO_VALID 0.6
 #define ID_VS_OTHERS 0
 
 using namespace std;
@@ -167,7 +167,10 @@ void createDB(vector<Pattern> &p) {
 	int nb_train((int)(RATIO_TRAIN*(double)count[0]));
 	int nb_valid((int)(RATIO_VALID*(double)count[0]));		
 	int nb_test(count[0]-nb_train-nb_valid);
-	cout << nb_train<<" "<< nb_valid <<" "<< nb_test << endl;
+	cout << "Samples : ";
+       	cout << "train="<<NOF_CLASSES*nb_train<<", ";
+	cout << "valid="<<NOF_CLASSES*nb_valid<<", ";
+	cout << "test="<<NOF_CLASSES*nb_test << endl;
 
 	int nof_outputs;
 	if(ID_VS_OTHERS==0) nof_outputs = NOF_CLASSES;
