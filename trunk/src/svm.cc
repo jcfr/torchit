@@ -72,7 +72,7 @@ int main(int argc, char **argv)
 	cmd.addText("\nLearning Options:"); 
 	cmd.addRCmdOption("-std", &(param.stdv), 10., "the std parameter in the gaussian kernel [exp(-|x-y|^2/std^2)]", true);
 	cmd.addRCmdOption("-c", &(param.c_cst), 100., "trade off cst between error/margin");
-	cmd.addRCmdOption("-e", &(param.accuracy), 0.0000005, "end accuracy");
+	cmd.addRCmdOption("-e", &(param.accuracy), 0.001, "end accuracy");
 	cmd.addRCmdOption("-m", &(param.cache_size), 50., "cache size in Mo");
 	cmd.addICmdOption("-h", &(param.iter_shrink), 100, "minimal number of iterations before shrinking");
 
@@ -153,10 +153,12 @@ void Training(Allocator *allocator, SvmParam *param, CmdLine *cmd) {
 	//=================== Measurer ===================
 	// The list of measurers
 	MeasurerList measurers;
-
+/*
 	TwoClassFormat *class_format = new(allocator) TwoClassFormat(data);
       ClassMeasurer *class_meas = new(allocator) ClassMeasurer(svm->outputs, data, class_format, cmd->getXFile("the_class_err"));
       measurers.addNode(class_meas);
+     */ 
+      
 	// The mean square error file on disk
 	/*char mse_train_fname[256] = "MSE_train";
 	strcat(mse_train_fname,param->suffix);
