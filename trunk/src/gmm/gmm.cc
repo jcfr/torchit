@@ -29,14 +29,25 @@ struct MlpParam{
 	int n_inputs;
 	int n_outputs;
 	int n_hu;
-	int max_iter; 
+
 	real accuracy;
-	real learning_rate;
-	real weight_decay;
+
+
 	char *file;
 	char *valid_file;
 	char *suffix;
 	char *model_file;
+
+
+	int n_gaussians;
+	real threshold;
+	real prior;
+	int max_iter_kmeans;
+	int max_iter_gmm;
+	real accuracy;
+	int k_fold;
+
+
 };
 
 
@@ -52,8 +63,11 @@ void Testing(Allocator *allocator, MlpParam *param, CmdLine *cmd);
 int main(int argc, char **argv)
 {
 
+	// used for memory management
 	Allocator *allocator = new Allocator;
 	DiskXFile::setLittleEndianMode();
+
+	// structure supporting all parameters
 	MlpParam param;
 
 
@@ -72,12 +86,16 @@ int main(int argc, char **argv)
 	cmd.addICmdArg("n_inputs", &(param.n_inputs), "input dimension of the data", true);
 	cmd.addICmdArg("n_targets", &(param.n_outputs), "output dim. (regression) or # of classes (classification)", true);
 
+	cmd.addText("\nModel Options:");
+	cmd.addICmdOption("-n_gaussians", &(param.n_gaussians), 10, "number of Gaussians");
+
 	cmd.addText("\nLearning Options:");
-	cmd.addICmdOption("-nhu", &(param.n_hu), 15, "number of hidden units", true);
-	cmd.addICmdOption("-iter", &(param.max_iter), 25, "max number of iterations");
-	cmd.addRCmdOption("-lr", &(param.learning_rate), 0.01, "learning rate");
+	cmd.addRCmdOption("-threshold", &(param.threshold), 0.001, "variance threshold");
+	cmd.addRCmdOption("-prior", &(param.prior), 0.001, "prior on the weights");
+	cmd.addICmdOption("-iterk", &(param.max_iter_kmeans), 25, "max number of iterations of KMeans");
+	cmd.addICmdOption("-iterg", &(param.max_iter_gmm), 25, "max number of iterations of GMM");
 	cmd.addRCmdOption("-e", &(param.accuracy), 0.0000005, "end accuracy");
-	cmd.addRCmdOption("-wd", &(param.weight_decay), 0, "weight decay", true);
+	cmd.addICmdOption("-kfold", &(param.k_fold), -1, "number of folds, if you want to do cross-validation");
 
 	cmd.addText("\nMisc Options:");
 	cmd.addSCmdOption("-valid", &(param.valid_file),"NULL","the valid file");
