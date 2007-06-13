@@ -78,7 +78,7 @@ int main(int argc, char **argv)
 	cmd.addICmdOption("-nhu", &(param.n_hu), 15, "number of hidden units", true);
 	cmd.addICmdOption("-iter", &(param.max_iter), 25, "max number of iterations");
 	cmd.addRCmdOption("-lr", &(param.learning_rate), 0.01, "learning rate");
-	cmd.addRCmdOption("-e", &(param.accuracy), 0.0000005, "end accuracy");
+	cmd.addRCmdOption("-e", &(param.accuracy), 1e-5, "end accuracy");
 	cmd.addRCmdOption("-wd", &(param.weight_decay), 0, "weight decay", true);
 
 	cmd.addText("\nMisc Options:");
