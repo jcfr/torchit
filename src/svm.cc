@@ -44,17 +44,17 @@ using namespace Torch;
 
 /* Prototype */
 SVM *createMachine(Allocator *allocator, SvmParam *param); 
-void TrainingKernels(Allocator *allocator, SVM **svms, MatDataSet *data, DiskXFile *model, SvmParam *param); 
 void Training(Allocator *allocator, SvmParam *param,CmdLine *cmd);
-//void Testing(Allocator *allocator, SvmParam *param, CmdLine *cmd);
 
 int main(int argc, char **argv)
 {
 
+	SvmParam param;
+	int ite_start,ite_end,ite_step;
+	char *dir_name;
+	
 	Allocator *allocator = new Allocator;
 	DiskXFile::setLittleEndianMode();
-	SvmParam param;
-
 
 	//=================== The command-line ==========================
 
@@ -67,41 +67,47 @@ int main(int argc, char **argv)
 	// Train mode
 	cmd.addText("\nArguments:");
 	cmd.addSCmdArg("file", &(param.file), "the train file");
-	cmd.addICmdArg("n_classes", &(param.n_classes), "the number of classes", true);
 
 	cmd.addText("\nLearning Options:"); 
+	cmd.addICmdOption("n_classes", &(param.n_classes),1, "the number of classes", true);
 	cmd.addRCmdOption("-std", &(param.stdv), 10., "the std parameter in the gaussian kernel [exp(-|x-y|^2/std^2)]", true);
 	cmd.addRCmdOption("-c", &(param.c_cst), 100., "trade off cst between error/margin");
-	cmd.addRCmdOption("-e", &(param.accuracy), 0.001, "end accuracy");
+	cmd.addRCmdOption("-e", &(param.accuracy), 0.01, "end accuracy");
 	cmd.addRCmdOption("-m", &(param.cache_size), 50., "cache size in Mo");
 	cmd.addICmdOption("-h", &(param.iter_shrink), 100, "minimal number of iterations before shrinking");
 
 	cmd.addText("\nMisc Options:");
-	cmd.addBCmdOption("-norm", &(param.normalize),true,"Apply normalization to the database");
+	cmd.addBCmdOption("-norm", &(param.normalize),false,"Apply normalization to the database");
 	cmd.addSCmdOption("-valid", &(param.valid_file),"NULL","the valid file");
 	cmd.addSCmdOption("-model", &(param.model_file),"bp_model.dat","the model file");
-	cmd.addSCmdOption("-suffix", &(param.suffix),"","Use a suffix for MSE (train/valid) error");
 
-	cmd.addMasterSwitch("--test");
-	cmd.addText("\nArguments:");
-	cmd.addSCmdArg("model", &(param.model_file), "the model file");
-	cmd.addSCmdArg("file", &(param.file), "the test file");
+	cmd.addText("\nIteration Options:");
+	cmd.addSCmdOption("-suffix", &(param.suffix),"","Use a suffix for MSE (train/valid) error");
+	cmd.addSCmdOption("-dir", &dir_name, ".", "directory to save measures");
+	cmd.addICmdOption("-ite_start", &ite_start, 20, "starting std iteration");
+	cmd.addICmdOption("-ite_step", &ite_step, 1, "step of std iteration n");
+	cmd.addICmdOption("-ite_end", &ite_end, 100, "end std iteration");
+	
 
 
 	// Read the command line
 	param.mode = cmd.read(argc, argv);
 
-	printf("mode is:%d\n",param.mode);
+	printf("Debut \n");
+	fflush(stdout);
+	printf("mode is:%d, %s\n",param.mode,dir_name);
 	//=================== Select the mode ==========================
 	switch(param.mode) {
 		case TRAIN:
-			Training(allocator,&param,&cmd);
+			for(int i=ite_start;i<ite_end;i+=ite_step) {
+				param.stdv=i;
+				Training(allocator,&param,&cmd);
+			}
 			break;
 		case TEST:
 			//Testing(allocator,&param,&cmd);
 			break;
 	}
-
 	delete allocator;
 	return(0);
 }
@@ -128,24 +134,22 @@ void Training(Allocator *allocator, SvmParam *param, CmdLine *cmd) {
 	 //=================== The Trainer ===============================
 
 	QCTrainer trainer(svm);
-	if(param->mode == 0)
-	{
 	trainer.setROption("end accuracy", param->accuracy);
 	trainer.setIOption("iter shrink", param->iter_shrink);
-	}
 
 	//=================== DataSets  ===================
 	//Create a data set
 	MatDataSet *mat_data = new(allocator) MatDataSet(param->file, -1, param->n_classes);
 	//Computes means and standard deviation
+	MeanVarNorm *mv_norm = NULL;
 	if(param->normalize) {
-		MeanVarNorm *mv_norm = new(allocator) MeanVarNorm(mat_data);
+		mv_norm = new(allocator) MeanVarNorm(mat_data);
 		//Normalizes the data set
 		mat_data->preProcess(mv_norm);
 		mv_norm->saveXFile(model);
 	}
 	
-	 Sequence *class_labels = new(allocator) Sequence(2, 1);
+	Sequence *class_labels = new(allocator) Sequence(2, 1);
 	class_labels->frames[0][0] = -1;
 	class_labels->frames[1][0] = 1;
 	DataSet *data = new(allocator) ClassFormatDataSet(mat_data, class_labels);
@@ -153,105 +157,53 @@ void Training(Allocator *allocator, SvmParam *param, CmdLine *cmd) {
 	//=================== Measurer ===================
 	// The list of measurers
 	MeasurerList measurers;
-/*
-	TwoClassFormat *class_format = new(allocator) TwoClassFormat(data);
-      ClassMeasurer *class_meas = new(allocator) ClassMeasurer(svm->outputs, data, class_format, cmd->getXFile("the_class_err"));
-      measurers.addNode(class_meas);
-     */ 
-      
-	// The mean square error file on disk
-	/*char mse_train_fname[256] = "MSE_train";
-	strcat(mse_train_fname,param->suffix);
-	DiskXFile *mse_train_file = new(allocator) DiskXFile(mse_train_fname, "w");
-	MSEMeasurer *mse_meas = new(allocator) MSEMeasurer(mlp->outputs, data, mse_train_file);
-	measurers.addNode(mse_meas);
-	*/
 
-	/*
-	OneHotClassFormat *class_format = new(allocator) OneHotClassFormat(param->n_classes);
+	TwoClassFormat *class_format = new(allocator) TwoClassFormat(data);
 	char class_train_fname[256] = "Class_train";
 	strcat(class_train_fname,param->suffix);
+	DiskXFile *class_train_file = new(allocator) DiskXFile(class_train_fname, "a");
 
-    	ClassMeasurer *class_meas = new(allocator) ClassMeasurer(svms->outputs, data, class_format, cmd->getXFile(class_train_fname));
-   	measurers.addNode(class_meas);
-	*/
-
+	ClassMeasurer *class_meas = new(allocator) ClassMeasurer(svm->outputs, data, class_format, class_train_file);	
+	measurers.addNode(class_meas);
+      
 	//================= Validation (Data & Mesurer) ==============
 	if(validation) {
-		/*
 		printf("Load Validation data...\n");
+		MatDataSet *mat_vdata =  new(allocator) MatDataSet(param->valid_file, -1, 1);
+		if(param->normalize) mat_vdata->preProcess(mv_norm);
+		DataSet *vdata = new(allocator) ClassFormatDataSet(mat_vdata, class_labels);
+
+/*
 		char mse_valid_fname[256] = "MSE_valid";
 		strcat(mse_valid_fname,param->suffix);
-		DataSet *vdata =  new(allocator) MatDataSet(param->valid_file, param->n_inputs, param->n_outputs);
-		vdata->preProcess(mv_norm);
-		DiskXFile *mse_valid_file = new(allocator) DiskXFile(mse_valid_fname, "w");
+		DiskXFile *mse_valid_file = new(allocator) DiskXFile(mse_valid_fname, "a");
 		MSEMeasurer *mse_valid_meas = new(allocator) MSEMeasurer(mlp->outputs, vdata, mse_valid_file);
 		measurers.addNode(mse_valid_meas);
-
+*/
+		TwoClassFormat *class_format_valid = new(allocator) TwoClassFormat(vdata);
 		char class_valid_fname[256] = "Class_valid";
 		strcat(class_valid_fname,param->suffix);
-
-        	ClassMeasurer *valid_class_meas = new(allocator) ClassMeasurer(mlp->outputs, vdata, class_format, cmd->getXFile(class_valid_fname));
-       		measurers.addNode(valid_class_meas);*/
+		DiskXFile *class_valid_file = new(allocator) DiskXFile(class_valid_fname, "a");
+        	ClassMeasurer *valid_class_meas = new(allocator) ClassMeasurer(svm->outputs, vdata, class_format_valid, class_valid_file);
+       		measurers.addNode(valid_class_meas);
 	}
 
 	//================ Train each kernels =====================
-      	  trainer.train(data, NULL);
-    message("%d SV with %d at bounds", svm->n_support_vectors, svm->n_support_vectors_bound);
-    
-    /*
-    DiskXFile model_(model_file, "w");
-    cmd.saveXFile(&model_);
-    if(normalize)
-      mv_norm->saveXFile(&model_);
-    svm->saveXFile(&model_);
-*/
+	trainer.train(data, NULL);
+	message("%d SV with %d at bounds", svm->n_support_vectors, svm->n_support_vectors_bound);
+   
+	trainer.test(&measurers);
+ 
+/*
 	//================ Save all the data in the model =====================
-	//mlp->saveXFile(&model_);
+	DiskXFile model_(model_file, "w");
+	cmd.saveXFile(&model_);
+	if(normalize)
+	mv_norm->saveXFile(&model_);
+	svm->saveXFile(&model_);
+*/
 }
 
-/*
-void Testing(Allocator *allocator, MlpParam *param, CmdLine *cmd) {
-
-	//=================== Load Model =====================
-	DiskXFile *model = new(allocator) DiskXFile(param->model_file, "r");
-	cmd->loadXFile(model);
-
-
-	//=================== Validation DataSets  ===================	
-	printf("Load data...\n");
-	printf("%s, %d, %d, %d\n",param->file,param->n_inputs,param->n_hu,param->n_outputs);
-	DataSet *data = new(allocator) MatDataSet(param->file, param->n_inputs, param->n_outputs);
-
-	//=================== Normalize Data  ===================
-	printf("Normalize data ...\n");
-	MeanVarNorm *mv_norm = NULL;
-	mv_norm = new(allocator) MeanVarNorm(data);
-	mv_norm->loadXFile(model); //Loading value from model to know how we normalize last time
-        data->preProcess(mv_norm);
-
-	//=================== The Machine and its trainer  ===================	
-	printf("Building Machine...\n");
-	//Create Machine structure
-	ConnectedMachine *mlp = createMachine(allocator,param);
-	mlp->loadXFile(model); //Loading MLP weight structure
-	//Create trainer structure
-	StochasticGradient *trainer = createTrainer(allocator, mlp);
-
-	//=================== Mesurer  ===================
-	printf("Building Measurer...\n");
-	// The list of measurers
-	MeasurerList measurers;
-
-	// Measurers on the training dataset
-	MSEMeasurer *test_mse_meas = new(allocator) MSEMeasurer(mlp->outputs, data, cmd->getXFile("testing_mse_err"));
-        measurers.addNode(test_mse_meas);
-
-	//=================== Test the machine ===============================
-	printf("Test our built model\n");
-	trainer->test(&measurers);
-}*/
-	
 
 //=================== Create the MLP... =========================
 SVM * createMachine(Allocator *allocator, SvmParam *param) {
@@ -270,8 +222,4 @@ SVM * createMachine(Allocator *allocator, SvmParam *param) {
 
 	return svm;
 }
-
-
-
-
 
