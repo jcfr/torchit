@@ -1,12 +1,10 @@
 /* The measurer */
 #include "ClassMeasurer.h"
 #include "MSEMeasurer.h"
-#include "OneHotClassFormat.h"
 
 /* The trainer */
 #include "StochasticGradient.h" //Use gradient descent
 #include "MSECriterion.h" //Optimize mean square error
-#include "Random.h"
 
 /* The MLP tools */
 #include "ConnectedMachine.h"
@@ -88,7 +86,7 @@ int main(int argc, char **argv)
 
 	cmd.addMasterSwitch("--test");
 	cmd.addSCmdArg("model", &(param.model_file), "the model file");
-	cmd.addSCmdArg("file", &(param.file), "the test file");
+	cmd.addSCmdArg("file", &(param.file), "the train file");
 
 
 	// Read the command line
@@ -118,10 +116,9 @@ void Training(Allocator *allocator, MlpParam *param, CmdLine *cmd) {
 	//================== Check if we need to validate the data ===================
 	bool validation(false);
 	if(strcmp(param->valid_file,"NULL") != 0) validation=true;
+	
 	printf("Start Training ... \n");
 	//=================== The Machine and its trainer  ===================	
-		
-	Random::seed();
 	//Create Machine
 	ConnectedMachine *mlp = createMachine(allocator,param);
 	//Create Trainer
@@ -147,13 +144,6 @@ void Training(Allocator *allocator, MlpParam *param, CmdLine *cmd) {
 	MSEMeasurer *mse_meas = new(allocator) MSEMeasurer(mlp->outputs, data, mse_train_file);
 	measurers.addNode(mse_meas);
 
-	OneHotClassFormat *class_format = new(allocator) OneHotClassFormat(mlp->n_outputs);
-	char class_train_fname[256] = "Class_train";
-	strcat(class_train_fname,param->suffix);
-
-    	ClassMeasurer *class_meas = new(allocator) ClassMeasurer(mlp->outputs, data, class_format, cmd->getXFile(class_train_fname));
-   	measurers.addNode(class_meas);
-
 	//================= Validation (Data & Mesurer) ==============
 	if(validation) {
 		printf("Load Validation data...\n");
@@ -164,12 +154,6 @@ void Training(Allocator *allocator, MlpParam *param, CmdLine *cmd) {
 		DiskXFile *mse_valid_file = new(allocator) DiskXFile(mse_valid_fname, "w");
 		MSEMeasurer *mse_valid_meas = new(allocator) MSEMeasurer(mlp->outputs, vdata, mse_valid_file);
 		measurers.addNode(mse_valid_meas);
-
-		char class_valid_fname[256] = "Class_valid";
-		strcat(class_valid_fname,param->suffix);
-
-        	ClassMeasurer *valid_class_meas = new(allocator) ClassMeasurer(mlp->outputs, vdata, class_format, cmd->getXFile(class_valid_fname));
-       		measurers.addNode(valid_class_meas);
 	}
 
 
@@ -229,7 +213,6 @@ void Testing(Allocator *allocator, MlpParam *param, CmdLine *cmd) {
 //=================== Create the MLP... =========================
 ConnectedMachine *createMachine(Allocator *allocator, MlpParam *param) {
 	ConnectedMachine *mlp = new(allocator) ConnectedMachine();
-	printf("Build connected machine: %d %d %d, %f\n",param->n_inputs,param->n_hu,param->n_outputs,param->weight_decay);
 	if(param->n_hu > 0)  {
 	
 		//Set the first layer (input -> hidden units)
@@ -238,7 +221,7 @@ ConnectedMachine *createMachine(Allocator *allocator, MlpParam *param) {
 		mlp->addFCL(c1);    
 		
 		//Set the second layer (threshold in hidden units)
-		Sigmoid *c2 = new(allocator) Sigmoid(param->n_hu);
+		Tanh *c2 = new(allocator) Tanh(param->n_hu);
 		mlp->addFCL(c2);
 
 		//Set the third layer (Output value)
