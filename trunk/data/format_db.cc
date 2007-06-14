@@ -5,9 +5,9 @@
 #include <algorithm>
 #include <time.h>
 
-#define NOF_PATTERNS 2310
-#define NOF_DIMS 19
-#define NOF_CLASSES 7
+#define NOF_PATTERNS 569
+#define NOF_DIMS 30
+#define NOF_CLASSES 1
 #define RATIO_TRAIN 0.02
 #define RATIO_VALID 0.6
 #define ID_VS_OTHERS 0
@@ -22,7 +22,7 @@ public:
 
 	//Constructor by default
 	Pattern():
-		id(0), code("0 0 0 0 0 0 0"), values("140.0 125.0 9 0.0 0.0 0.2777779 0.06296301 0.66666675 0.31111118 6.185185 7.3333335 7.6666665 3.5555556 3.4444444 4.4444447 -7.888889 7.7777777 0.5456349 -1.1218182")
+		id(0), code("0 0 0 0 0 0 0"), values("")
 	{}
 
 	//Destructor 
@@ -96,7 +96,7 @@ vector<int> randperm(int start,int end);
 
 int main() {
 
-	string file_name("segmentation.all");
+	string file_name("wdbc.data");
 	
 	//Creating the vectors of all patterns
 	vector<Pattern> p(NOF_PATTERNS,Pattern());

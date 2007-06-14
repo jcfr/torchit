@@ -50,7 +50,7 @@ int main(int argc, char **argv)
 {
 
 	SvmParam param;
-	int ite_start,ite_end,ite_step;
+	real ite_start,ite_end,ite_step;
 	char *dir_name;
 	
 	Allocator *allocator = new Allocator;
@@ -84,9 +84,9 @@ int main(int argc, char **argv)
 	cmd.addText("\nIteration Options:");
 	cmd.addSCmdOption("-suffix", &(param.suffix),"","Use a suffix for MSE (train/valid) error");
 	cmd.addSCmdOption("-dir", &dir_name, ".", "directory to save measures");
-	cmd.addICmdOption("-ite_start", &ite_start, 20, "starting std iteration");
-	cmd.addICmdOption("-ite_step", &ite_step, 1, "step of std iteration n");
-	cmd.addICmdOption("-ite_end", &ite_end, 100, "end std iteration");
+	cmd.addRCmdOption("-ite_start", &ite_start, 20, "starting std iteration");
+	cmd.addRCmdOption("-ite_step", &ite_step, 1, "step of std iteration n");
+	cmd.addRCmdOption("-ite_end", &ite_end, 100, "end std iteration");
 	
 
 
@@ -99,7 +99,7 @@ int main(int argc, char **argv)
 	//=================== Select the mode ==========================
 	switch(param.mode) {
 		case TRAIN:
-			for(int i=ite_start;i<ite_end;i+=ite_step) {
+			for(real i=ite_start;i<ite_end;i+=ite_step) {
 				param.stdv=i;
 				Training(allocator,&param,&cmd);
 			}
@@ -222,4 +222,3 @@ SVM * createMachine(Allocator *allocator, SvmParam *param) {
 
 	return svm;
 }
-
