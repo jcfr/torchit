@@ -2,16 +2,17 @@ close all;
 clear all;
 
 %% Default files (should not be change)
-torchit='/home/rat/Master2/PCML/Torch3/torchit/torchit/';	
+torchit='/home/rat/Master2/PCML/Torch3/torchit/torchit/';
+torchit='/home/neub/torchit/'
 exec=[torchit,'src/Linux_opt_float/bp --train '];
-args=[' -valid ',torchit,'data/valid ', torchit,'data/training 19 7'];
+args=[' -valid ',torchit,'data/francoisbobo_db/wdbc_validation.data ', torchit,'data/wdbc_training.data 30 1'];
 
 %% Options that we want to tune
-learn_rate=0.0001;
+learn_rate=0.001;
 w_decay=0;
-nhu_vec=[5,10,15,25,50,100];
-n_train=42;
-n_valid=1379;
+nhu_vec=[15,25,35,42,50,75,100];
+n_train=252;
+n_valid=128;
 
 %% Set the directory
 old_dir=pwd;
