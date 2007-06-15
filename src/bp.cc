@@ -1,6 +1,10 @@
 /* The measurer */
 #include "ClassMeasurer.h"
 #include "MSEMeasurer.h"
+#include "ClassFormatDataSet.h"
+#include "OneHotClassFormat.h"
+#include "TwoClassFormat.h"
+#include "ClassMeasurer.h"
 
 /* The trainer */
 #include "StochasticGradient.h" //Use gradient descent
@@ -48,6 +52,7 @@ ConnectedMachine * createMachine(Allocator *allocator, MlpParam *param);
 StochasticGradient *createTrainer(Allocator *allocator, ConnectedMachine *mlp, MlpParam *opt=NULL); 
 void Training(Allocator *allocator, MlpParam *param,CmdLine *cmd);
 void Testing(Allocator *allocator, MlpParam *param, CmdLine *cmd);
+real error(ConnectedMachine *mlp, MatDataSet *data);
 
 int main(int argc, char **argv)
 {
@@ -87,6 +92,7 @@ int main(int argc, char **argv)
 	cmd.addMasterSwitch("--test");
 	cmd.addSCmdArg("model", &(param.model_file), "the model file");
 	cmd.addSCmdArg("file", &(param.file), "the train file");
+	cmd.addSCmdOption("-valid", &(param.valid_file),"NULL","the valid file");
 
 
 	// Read the command line
@@ -178,14 +184,25 @@ void Testing(Allocator *allocator, MlpParam *param, CmdLine *cmd) {
 	//=================== Validation DataSets  ===================	
 	printf("Load data...\n");
 	printf("%s, %d, %d, %d\n",param->file,param->n_inputs,param->n_hu,param->n_outputs);
-	DataSet *data = new(allocator) MatDataSet(param->file, param->n_inputs, param->n_outputs);
+	MatDataSet *mat_vdata = new(allocator) MatDataSet(param->valid_file, param->n_inputs, param->n_outputs);
+	MatDataSet *mat_data = new(allocator) MatDataSet(param->file, param->n_inputs, param->n_outputs);
 
 	//=================== Normalize Data  ===================
 	printf("Normalize data ...\n");
 	MeanVarNorm *mv_norm = NULL;
-	mv_norm = new(allocator) MeanVarNorm(data);
+	mv_norm = new(allocator) MeanVarNorm(mat_data);
 	mv_norm->loadXFile(model); //Loading value from model to know how we normalize last time
-        data->preProcess(mv_norm);
+        mat_data->preProcess(mv_norm);
+	mat_vdata->preProcess(mv_norm);
+
+	Sequence *class_labels = new(allocator) Sequence(2,1);
+	class_labels->frames[0][0] =  0;
+	class_labels->frames[0][1] =  1;
+
+	DataSet *data = new(allocator) ClassFormatDataSet(mat_data, class_labels);
+	DataSet *vdata = new(allocator) ClassFormatDataSet(mat_vdata, class_labels);
+//    	OneHotClassFormat *class_format = new(allocator) OneHotClassFormat(1);
+    	TwoClassFormat *class_format = new(allocator) TwoClassFormat(data);
 
 	//=================== The Machine and its trainer  ===================	
 	printf("Building Machine...\n");
@@ -201,8 +218,18 @@ void Testing(Allocator *allocator, MlpParam *param, CmdLine *cmd) {
 	MeasurerList measurers;
 
 	// Measurers on the training dataset
-	MSEMeasurer *test_mse_meas = new(allocator) MSEMeasurer(mlp->outputs, data, cmd->getXFile("testing_mse_err"));
-        measurers.addNode(test_mse_meas);
+//	MSEMeasurer *test_mse_meas = new(allocator) MSEMeasurer(mlp->outputs, data, cmd->getXFile("testing_mse_err"));
+//        measurers.addNode(test_mse_meas);
+	ClassMeasurer *test_class_meas = new(allocator) ClassMeasurer(mlp->outputs, data, class_format, cmd->getXFile("test_class_err"));
+	measurers.addNode(test_class_meas);
+
+	// Measurers on the training dataset
+//	MSEMeasurer *valid_mse_meas = new(allocator) MSEMeasurer(mlp->outputs, vdata, cmd->getXFile("validation_mse_err"));
+//        measurers.addNode(valid_mse_meas);
+	ClassMeasurer *valid_class_meas = new(allocator) ClassMeasurer(mlp->outputs, vdata, class_format, cmd->getXFile("valid_class_err"));
+	measurers.addNode(valid_class_meas);
+
+	printf("error :%f\n",error(mlp,mat_vdata));
 
 	//=================== Test the machine ===============================
 	printf("Test our built model\n");
@@ -262,4 +289,19 @@ StochasticGradient *createTrainer(Allocator *allocator, ConnectedMachine *mlp, M
 	return trainer;
 }
 
-
+real error(ConnectedMachine *mlp, MatDataSet *data)
+{    
+    int failed=0;
+    for (int i=0; i<data->n_examples; i++)
+    {
+        //printf("Iteration: %i\n",i);
+        data->setExample(i);
+        mlp->forward(data->inputs);
+        Sequence *seq=mlp->outputs;
+        //printf("%f , %f",*data->targets->frames[data->targets->frame_size-1],*seq->frames[seq->frame_size-1]);
+        if (data->targets->frames[0][0]==0 && seq->frames[0][0]>.5) failed++;
+        else if (data->targets->frames[0][0]==1 && seq->frames[0][0]<=.5) failed++;
+        
+    }
+    return (real)failed/(real)data->n_examples;
+}
