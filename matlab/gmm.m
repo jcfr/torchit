@@ -1,4 +1,4 @@
-function []=gmm(dataset_suffix, n_classes, workdir, progdir, progname)
+function []=gmm(params, dataset_suffix, n_classes, workdir, progdir, progname, suffixes)
 
 %% Default files (should not be change)
 % progdir='"C:/Documents and Settings/J-Chris/My Documents/Visual Studio 2005/Projects/torchit/release/';	
@@ -7,9 +7,9 @@ function []=gmm(dataset_suffix, n_classes, workdir, progdir, progname)
 exec=[progdir, progname, '" '];
 args=[' -dir "', workdir, '"'];
 % args=[args, ' wdbc 2 '];
-args=[args, ' ',dataset_suffix,' ',n_classes,' '];
+args=[args, ' ',dataset_suffix,' ',int2str(n_classes),' '];
 
-opts = [];
+opts = [params, ' -training_suffix _', char(suffixes(1)), ' -validation_suffix _', char(suffixes(2)), ' -testing_suffix _', char(suffixes(3))];
 
 %save current directory
 old_dir = pwd;
