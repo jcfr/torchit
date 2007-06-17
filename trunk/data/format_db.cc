@@ -1,9 +1,149 @@
-#include <iostream>
-#include <fstream>
-#include <string>
-#include <vector>
-#include <algorithm>
-#include <time.h>
+﻿The code for loading the data and setting the measurer is not relevant, so we decide to insert it only for the back-propagation in the appendix. We also use a structure Param to ease the use of function with parameters which is inside the code of back-propagation.
+Part B,C,D of the appendix only contains relevant code.
+
+A. Back-Propagation
+
+/* A structure is used to ease the use of parameters*/
+struct MlpParam{
+	int n_inputs;
+	int n_outputs;
+	int n_hu;
+	int max_iter; 
+	real accuracy;
+	real learning_rate;
+	real weight_decay;
+	char *file;
+	char *valid_file;
+	char *suffix;
+	char *model_file;
+};
+
+
+//=================== Create the MLP... =========================
+ConnectedMachine *createMachine(Allocator *allocator, MlpParam *param) {
+	ConnectedMachine *mlp = new(allocator) ConnectedMachine();
+	if(param->n_hu > 0)  {
+	
+		//Set the first layer (input -> hidden units)
+		Linear *c1 = new(allocator) Linear( param->n_inputs, param->n_hu);
+		c1->setROption("weight decay", param->weight_decay);
+		mlp->addFCL(c1);    
+		
+		//Set the second layer (threshold in hidden units)
+		Tanh *c2 = new(allocator) Tanh(param->n_hu);
+		mlp->addFCL(c2);
+
+		//Set the third layer (Output value)
+		Linear *c3 = new(allocator) Linear(param->n_hu, param->n_outputs);
+		c3->setROption("weight decay", param->weight_decay);
+		mlp->addFCL(c3);
+	  
+		//Put the last value to binary
+		Sigmoid *c4 = new(allocator) Sigmoid(param->n_outputs);
+      		mlp->addFCL(c4);
+		}
+
+	// Initialize the MLP
+	mlp->build();
+	mlp->setPartialBackprop();
+
+	return mlp;
+}
+
+
+//=================== The Trainer ===============================
+StochasticGradient *createTrainer(Allocator *allocator, ConnectedMachine *mlp, MlpParam *param) {
+
+	
+	// The criterion for the StochasticGradient (MSE criterion)
+	Criterion *criterion = NULL;
+	criterion = new(allocator) MSECriterion(mlp->n_outputs);
+
+	// The Gradient Machine Trainer
+	StochasticGradient *trainer = new(allocator) StochasticGradient(mlp, criterion);
+
+	if(param !=NULL) {
+		trainer->setIOption("max iter",param->max_iter);
+		trainer->setROption("end accuracy", param->accuracy);
+		trainer->setROption("learning rate", param->learning_rate);
+	}
+	return trainer;
+}
+...
+	
+	//=================== Loading & Normalize Data  ===================
+	MatDataSet *mat_vdata = new(allocator) MatDataSet(param->valid_file, param->n_inputs, param->n_outputs);
+	MatDataSet *mat_data = new(allocator) MatDataSet(param->file, param->n_inputs, param->n_outputs);
+	MeanVarNorm *mv_norm = new(allocator) MeanVarNorm(mat_data);
+       	mat_data->preProcess(mv_norm);
+	mat_vdata->preProcess(mv_norm);
+
+	//Setting the class label type for ClassMeasurer
+	Sequence *class_labels = new(allocator) Sequence(2,1);
+	class_labels->frames[0][0] =  0;
+	class_labels->frames[0][1] =  1;
+	DataSet *data = new(allocator) ClassFormatDataSet(mat_data, class_labels);
+	DataSet *vdata = new(allocator) ClassFormatDataSet(mat_vdata, class_labels);
+    	TwoClassFormat *class_format = new(allocator) TwoClassFormat(data);
+
+	//=================== Measurer  ===================
+	char mse_train_fname[256] = "MSE_train";
+	strcat(mse_train_fname,param->suffix);
+	DiskXFile *mse_train_file = new(allocator) DiskXFile(mse_train_fname, "w");
+	MSEMeasurer *mse_meas = new(allocator) MSEMeasurer(mlp->outputs, data, mse_train_file);
+	measurers.addNode(mse_meas);	
+	ClassMeasurer *class_meas = new(allocator) ClassMeasurer(mlp->outputs, data, class_format, cmd->getXFile("class_err"));
+	measurers.addNode(class_meas);
+
+...
+
+trainer->train(data, &measurers);
+
+B. Support Vector Machine
+//=================== Create the MLP... =========================
+SVM * createMachine(Allocator *allocator, SvmParam *param) {
+
+	//Create the kernel type
+	Kernel *kernel = new(allocator) GaussianKernel(1./(param->stdv*param->stdv));
+
+	//Create SVM
+ 	SVM *svm = new(allocator) SVMClassification(kernel);
+	
+	
+	if(param->mode == TRAIN)   {
+		svm->setROption("C", param->c_cst);
+		svm->setROption("cache size", param->cache_size);
+	}
+
+	return svm;
+}
+...
+
+	//Use to format the matdatset class label from 0,1 to -1,1
+	Sequence *class_labels = new(allocator) Sequence(2, 1);
+	class_labels->frames[0][0] = -1;
+	class_labels->frames[1][0] = 1;
+	DataSet *data = new(allocator) ClassFormatDataSet(mat_data, class_labels);
+...
+
+	//We use a classmeasurer to get the classification error.
+	MeasurerList measurers;
+	TwoClassFormat *class_format = new(allocator) TwoClassFormat(data);
+	char class_train_fname[256] = "Class_train";
+	strcat(class_train_fname,param->suffix);
+	DiskXFile *class_train_file = new(allocator) DiskXFile(class_train_fname, "a");
+	ClassMeasurer *class_meas = new(allocator) ClassMeasurer(svm->outputs, data, class_format, class_train_file);	
+	measurers.addNode(class_meas);
+
+...
+	trainer.train(data, NULL);
+	message("%d SV with %d at bounds", svm->n_support_vectors, svm->n_support_vectors_bound);
+	trainer.test(&measurers);
+
+
+
+C. Gaussian Mixture Model
+D. Format the database
 
 #define NOF_PATTERNS 569
 #define NOF_DIMS 30
@@ -13,6 +153,9 @@
 #define ID_VS_OTHERS 0
 
 using namespace std;
+
+
+/* Class that is use to organize the patterns */
 class Pattern {
 
 public:
@@ -22,28 +165,20 @@ public:
 
 	//Constructor by default
 	Pattern():
-		id(0), code("0 0 0 0 0 0 0"), values("")
+		id(0), code("0"), values("")
 	{}
 
 	//Destructor 
 	~Pattern() {}
 
 	void setCode(string name) {
-		if(name.compare("BRICKFACE") == 0) id=1;
-		if(name.compare("SKY") == 0) id=2;
-		if(name.compare("FOLIAGE") == 0) id=3;
-		if(name.compare("CEMENT") == 0) id=4;
-		if(name.compare("WINDOW") == 0) id=5;
-		if(name.compare("PATH") == 0) id=6;
-		if(name.compare("GRASS") == 0) id=7;
-		// Chaque classe a son output 
-		if(ID_VS_OTHERS == 0) {
-			if(id != 0) code.replace((id-1)*2,1,"1");
+		if(name.compare("M") == 0) {
+			id=1;
+			code="1"
 		}
-		//Il y a une classe qui est contre les autres
 		else {
-			if(id == ID_VS_OTHERS) code = "1";
-			else code = "0";
+			id=1;
+			code="1"
 		}
 	}
 
@@ -56,6 +191,8 @@ public:
 
 	friend ostream& operator<<(ostream& out, const Pattern&  p);
 };
+
+
 
 // opérateur pour l'affichage d'un pattern
 ostream& operator<<(ostream& out, const Pattern&  p)
@@ -83,135 +220,13 @@ private:
   int current;
 };
 
+
 // do it again, with explicit random number generator
 struct RandomInteger {
       int operator() (int m) { return rand() % m; }
 } randomize;
 
-/* Prototype */
-void load_file(string fileName, vector<Pattern> &p);
-void createDB(vector<Pattern> &p);
-void countNbP4Classes(vector <Pattern> &p, int *nb_inclass); 
-vector<int> randperm(int start,int end);
-
-int main() {
-
-	string file_name("wdbc.data");
-	
-	//Creating the vectors of all patterns
-	vector<Pattern> p(NOF_PATTERNS,Pattern());
-	//Loading text files into vector array
-	load_file(file_name,p);
-	//Creating database with special ratio
-	createDB(p);
-		
-
-	return 0;
-}
-
-
-void load_file(string fileName, vector<Pattern> &p) {
-    
-	string buf;
-	int pos,num(0);
-	int cnt(0);
-	
-	// Loading files
-	cout << "loading " << fileName << endl;
-	ifstream file;
-	file.open(fileName.c_str(), ios::in);
-	if(file.fail()) {
-		cerr << "Cannot read : " << fileName << "." << endl;
-		cerr << "Exiting now." << endl;
-		file.close();
-		exit(1);
-	}
-
-
-	//Parsing file
-    	do {
-        	getline(file, buf);
-		//Check empty or comment line
-        	if(buf[0] == '#' || buf.length() == 0) { //Do nothing
-			pos = 0;
-		}
-		else {
-			pos = buf.find_first_of(',');
-			p[cnt].setCode(buf.substr(0,pos));
-			p[cnt].setValues(buf.substr(pos+1,buf.length()));
-            		cnt++;
-		}        
-    	} 
-	while(!file.eof() );
-	file.close();
-
-	//Sorting all database in ascending id
-	sort(p.begin(),p.end(), SortByCode()); 
-}
-
-
-void createDB(vector<Pattern> &p) {
-	
-	//Count how many pattern we have for each classes
-	int count[] = {0,0,0,0,0,0,0}; 
-	countNbP4Classes(p,count);
-	for(int i(0); i<NOF_CLASSES; i++) cout << count[i] << " ";
-	cout << endl;
-	
-	//Create the 3 output files
-	ofstream fo_train("training", ios::trunc);
-	ofstream fo_valid("valid",ios::trunc);
-	ofstream fo_test("test",ios::trunc);
-
-	//Maybe do it more modular (if all classes are not the same)
-	int nb_train((int)(RATIO_TRAIN*(double)count[0]));
-	int nb_valid((int)(RATIO_VALID*(double)count[0]));		
-	int nb_test(count[0]-nb_train-nb_valid);
-	cout << "Samples: ";
-       	cout << "train="<<NOF_CLASSES*nb_train<<", ";
-	cout << "valid="<<NOF_CLASSES*nb_valid<<", ";
-	cout << "test="<<NOF_CLASSES*nb_test << endl;
-
-	int nof_outputs;
-	if(ID_VS_OTHERS==0) nof_outputs = NOF_CLASSES;
-	else nof_outputs = 1;
-
-	//Fill first row in each datafiles
-	fo_train << nb_train*NOF_CLASSES << " " << NOF_DIMS+nof_outputs << endl;
-	fo_valid << nb_valid*NOF_CLASSES << " " << NOF_DIMS+nof_outputs << endl;
-	fo_test  << nb_test*NOF_CLASSES  << " " << NOF_DIMS+nof_outputs << endl;
-	
-
-
-	//for(int i(0); i<10; i++) cout << train_randind[i] << endl;
-//	cout << train_randind.size()<<" "<<valid_randind.size()<<" "<<test_randind.size()<<endl;
-
-	//Initialize random seed 
-	srand ( time(NULL) );
-	for(int c(0); c<NOF_CLASSES; c++) {
-		vector<int> randind = randperm(0,count[c]);
-		for(int i(0); i<5; i++) cout << randind[i] << " ";
-		cout << endl;	
-		for(int i(0); i< count[c]; i++) {
-			if(i<nb_train) fo_train << p[randind[i]+ c*count[c]] << endl; 
-			else if(i< nb_train+nb_valid) fo_valid << p[randind[i]+ c*count[c]] << endl;
-			else fo_test << p[randind[i]+ c*count[c]] << endl;
-		}	
-	}
-		
-	fo_train.close();	
-	fo_valid.close();	
-	fo_test.close();	
-
-}  		
-
-void countNbP4Classes(vector<Pattern> &p, int *nb_inclass) {
-	for(int i(0); i<p.size(); i++) {
-		nb_inclass[p[i].id-1]++;
-	}
-}
-
-
+//Randomly shuffle a vector starting from start to end.
 vector<int> randperm(int start,int end)
 {
   // first make the vector containing 1 2 3 ... 10
