@@ -33,12 +33,12 @@ iterk = 35; % max number of iterations of KMeans / 25
 iterg = 35; % max number of iterations of GMM / 25
 accuracy = 0.00001; % end accuracy / 0.00001
 verbose = ''; % ' -verbose ';
-
+n_experiments = 200; 
   
 params_init = [verbose, ' -result_dir ', result_dir_prefix, ' -threshold ', num2str(threshold), ' -prior ', num2str(prior), ' -iterk ', int2str(iterk), ' -iterg ', int2str(iterg), ' -e ', num2str(accuracy)]; 
 
 i = n_gaussians; 
-%for i=1:20:200
+%for i=1:20:n_experiments
     n_gaussians = i; 
     
     prefix = ['_', int2str(n_gaussians)];
@@ -46,7 +46,7 @@ i = n_gaussians;
     params = [params_init, ' -n_gaussians ', int2str(n_gaussians), ' -prefix ' , prefix, ' ' ]; 
     
     %run gmm
-    gmm(params, dataset_suffix, n_classes, workdir, progdir, progname, cellstr([training_suffix; validation_suffix; testing_suffix]));
+    %gmm(params, dataset_suffix, n_classes, workdir, progdir, progname, cellstr([training_suffix; validation_suffix; testing_suffix]));
     
     %plot Measurer result
     % gmm_plot_nll(workdir, result_dir, iterg, n_classes, n_samples, n_gaussians, prefix, cellstr([training_suffix; validation_suffix; testing_suffix])); 
@@ -55,6 +55,6 @@ i = n_gaussians;
 %end;
 
 
-%gmm_plot_error(workdir, result_dir, n_classes, n_samples, cellstr([training_suffix; validation_suffix; testing_suffix])); 
+gmm_plot_error(workdir, result_dir, n_classes, n_samples, n_experiments, cellstr([training_suffix; validation_suffix; testing_suffix])); 
 
 
