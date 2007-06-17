@@ -1,4 +1,4 @@
-function [ ] = gmm_plot_error( workdir, result_sub_dir, n_classes, n_samples, suffixes )
+function [ ] = gmm_plot_error( workdir, result_sub_dir, n_classes, n_samples, n_experiments,  suffixes )
 %gmm_plot_error Summary of this function goes here
 %  Detailed explanation goes here
 
@@ -13,7 +13,7 @@ for i=1:n_classes,
 end; 
 
 
-figure(7);
+figure(20);
 clf reset; 
 for i=1:n_classes, 
     subplot(n_classes,1,i);
@@ -33,7 +33,7 @@ end;
 filename = [workdir, result_sub_dir, 'chart_ERROR_all.jpg']; 
 saveas(gcf,filename);
 
-figure(8);
+figure(21);
 clf reset; 
 for i=1:n_classes, 
     subplot(n_classes,1,i);
@@ -51,7 +51,31 @@ end;
 filename = [workdir, result_sub_dir, 'chart_ERROR_train-valid.jpg']; 
 saveas(gcf,filename);
 
-figure(9);
+figure(22);
+clf reset; 
+traine = zeros(n_experiments,1);
+vale = zeros(n_experiments,1);
+
+for i=1:n_classes, 
+    current_train = eval( char( training_error(i) ) ); 
+    current_val = eval( char( validation_error(i) ) );
+    traine = traine + current_train(:,2);
+    vale  = vale + current_val(:,2);
+end;
+traine = traine./n_classes; 
+vale = vale./n_classes; 
+hold on; 
+plot( traine, 'b');
+plot( vale, 'r');
+ylim([0 100]); 
+legend(['training (',int2str(n_samples(1,i)),'samples)'], ['validation (',int2str(n_samples(2,i)),'samples)'], 'Location', 'Best');
+title(['Classe ', int2str(i-1)]); 
+xlabel('N gaussians');
+ylabel('Classification Error (%)');
+filename = [workdir, result_sub_dir, 'chart_ERROR_train-valid_AVG.jpg']; 
+saveas(gcf,filename);
+
+figure(23);
 clf reset; 
 for i=1:n_classes, 
     subplot(n_classes,1,i);
