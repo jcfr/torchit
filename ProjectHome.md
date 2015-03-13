@@ -1,0 +1,1 @@
+The aim of this project is to implement a realistic application of artificial neural networks. Our work will be based on wisconsin breast cancer database (http://mlearn.ics.uci.edu/databases/breast-cancer-wisconsin/) and use the C++-based Torch machine learning library to implement BackPropagation, EM with GMMs (initialized with the K-means algorithm) and an SVM algorithm.
